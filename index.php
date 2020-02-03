@@ -64,21 +64,12 @@ if(isset($_POST['format'])) {
 
 // Generate c-test
 if($post_vars_set) {
-    set_format();
     // Split paragraph words & punctuation into array
     $items_array = split_paragraph($paragraph);
     // Get indexes of ends of sentences, i.e. '.', '!', and '?'
     $indexes = get_sentence_indexes($items_array);
-    // Leave 1st 2 sentences intact, then blank every 2nd word
-    if(count($indexes) > 2) {
-        $items_array = write_blanks($items_array, $indexes[1]);
-        // Generate paragraph text from array
-        $reassembled_paragraph = reassemble_paragraph($items_array);
-    } else {
-        $reassembled_paragraph = 'Input paragraph text must be at least 3 sentences long.';
-    }
-    print_output_page();
-}else{
+    set_format($format);
+} else {
     // Print ctest form
     print_input_page();
 }
@@ -86,12 +77,20 @@ if($post_vars_set) {
 /*
  * 
  */
-function set_format() {
-    global $format, $beginblank, $endblank;
-    if($format === 'moodle') {
-        $beginblank = '{1:SA:=';
-        $endblank = '}';
+function set_format($format) {
+    global $items_array, $indexes, $reassembled_paragraph;
+    if(count($indexes) > 2) {
+        if($format === 'moodle') {
+            $items_array = write_blanks_moodle($items_array, $indexes[1]);
+        } else {
+            $items_array = write_blanks_pdf($items_array, $indexes[1]);
+        }
+        // Generate paragraph text from array
+        $reassembled_paragraph = reassemble_paragraph($items_array);
+    } else {
+        $reassembled_paragraph = 'Input paragraph text must be at least 3 sentences long.';
     }
+    print_output_page();
 }
 /*
  * Split paragraph into words and punctuation
@@ -125,7 +124,7 @@ function get_sentence_indexes(array $items_array) {
  * Parameters array, int
  * Returns array
  */
-function write_blanks(array $items_array, int $index) {
+function write_blanks_pdf(array $items_array, int $index) {
     global $blank_word_count;
     $len = count($items_array);
     $even = false;
@@ -133,7 +132,7 @@ function write_blanks(array $items_array, int $index) {
         if(preg_match('/[a-zA-Z]/', $items_array[$i])) { // Find words
             if($even) { // Every other word
                 $even = false;
-                $items_array[$i] = blank_word($items_array[$i]);
+                $items_array[$i] = blank_word_pdf($items_array[$i]);
                 $blank_word_count++;
             } else {
                 $even = true;
@@ -148,7 +147,7 @@ function write_blanks(array $items_array, int $index) {
  * Parameter string
  * Returns string
  */
-function blank_word(string $word) {
+function blank_word_pdf(string $word) {
     global $beginblank, $endblank;
     $word_array = str_split($word);
     $len = count($word_array);
@@ -161,7 +160,52 @@ function blank_word(string $word) {
             $blanks_str = $blanks_str.'_';
         }
     }
-    $return_word = $letters_str.$beginblank.$blanks_str.$endblank;
+    $return_word = $letters_str.'<em>'.$blanks_str.'</em>';
+    return $return_word;
+}
+
+/*
+ * Select every other word for blanking
+ * Parameters array, int
+ * Returns array
+ */
+function write_blanks_moodle(array $items_array, int $index) {
+    global $blank_word_count;
+    $len = count($items_array);
+    $even = false;
+    for($i = $index; $i < $len; $i++) { // Start at 3rd sentence index
+        if(preg_match('/[a-zA-Z]/', $items_array[$i])) { // Find words
+            if($even) { // Every other word
+                $even = false;
+                $items_array[$i] = blank_word_moodle($items_array[$i]);
+                $blank_word_count++;
+            } else {
+                $even = true;
+            }
+        }
+    }
+    return $items_array;
+}
+
+/*
+ * Blank word, i.e. change letters in last half of word into blanks and add <em></em> tags
+ * Parameter string
+ * Returns string
+ */
+function blank_word_moodle(string $word) {
+    global $beginblank, $endblank;
+    $word_array = str_split($word);
+    $len = count($word_array);
+    $letters_str = '';
+    $blanks_str = '';
+    for($i = 0; $i < $len; $i++) {
+        if($i < floor($len/2)) {
+            $letters_str = $letters_str.$word_array[$i];
+        } else {
+            $blanks_str = $blanks_str.$word_array[$i];
+        }
+    }
+    $return_word = $letters_str.'{1:SA:='.$blanks_str.'}';
     return $return_word;
 }
 
