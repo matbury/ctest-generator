@@ -32,9 +32,21 @@ p, ul {
 }
 
 .ctest {
-    font-size: 20px; /* PDF text large enough to comfortably write in blanks */
+    font-family: monospace, monospace;
+    font-size: 18px; /* PDF text large enough to comfortably write in blanks */
 }
 
 em {
     letter-spacing: 5px; /* Show spaces between underscores, e.g. "wo_ _" */
 } 
+
+input[type=text] {
+  font-family: monospace, monospace;
+  font-size: 18px;
+  letter-spacing: 1px;
+  padding: 0px 0px;
+  margin: 2px 0;
+  box-sizing: border-box;
+  border: none;
+  background-image:url("__.png");
+}
