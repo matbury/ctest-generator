@@ -15,31 +15,41 @@
  */
 
 /*
+ * What does this script do?
+ * User inputs (copy & paste) a paragraph of text of at least 3 sentences.
+ * Script leaves 1st 2 sentences intact,
+ * then every 2nd word has 2nd half of word blanked.
+ * PDF mode, blanks = _ (CSS styled with gaps between)
+ * Moodle mode, blanks = Moodle > Quiz > Embedded answers (close) short answer format, e.g. second ha{1:SA:=lf} of ev{1:SA:=ery} other wo{1:SA:=rd}
+ * HTML form mode, blanks = input text field, background image represents underscores showing number of missing letters, maxlength limits user input to length of blanks.
+ * Font is monospace so letters line up with underscores on HTML input fields
+ * Background underscore image matches width & height of monospace font characters exactly (12 x 18px)
+ * Question: Can the shortanswer qtype be adapted to automagially generate c-tests like this?
+ */
+
+/*
  * @package C-test Generator
- * @copyright 2020 onwards Matt Bury (https://matbury.com/)
+ * @copyright 2020 Matt Bury (https://matbury.com/)
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 // Set default values for input
-$title = '[title] has not been set. Please go back and enter the title.';
-$paragraph = '[paragraph] has not been set. Please enter a paragraph '
-        . 'of at least 250 characters and 3 sentences.';
+$title = '[title]';
+$paragraph = '[paragraph]';
 $format = 'pdf';
 $post_vars_set = false;
-// Set default display format to PDF
-$beginblank = '<em>';
-$endblank = '</em>';
 // Counter for how many blanked words (for easier scoring)
 $blank_word_count = 0;
 
 // Get input data from c-test form
 if(isset($_POST['title'])) {
     $title_check = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-    if(mb_strlen($title_check) >= 1) {
+    if(mb_strlen($title_check) > 0) {
         $title = $title_check;
     }
 }
 
+// This one may be causing unexpectedly long blank lengths, perhaps introducing escape/URL encoded characters?
 if(isset($_POST['paragraph'])) {
     $paragraph_check = filter_input(INPUT_POST, 'paragraph', FILTER_SANITIZE_STRING);
     if(mb_strlen($paragraph_check) > 249) {
@@ -69,6 +79,8 @@ if($post_vars_set) {
     // Get indexes of ends of sentences, i.e. '.', '!', and '?'
     $indexes = get_sentence_indexes($items_array);
     set_format($format);
+    print_output_page();
+    
 } else {
     // Print ctest form
     print_input_page();
@@ -82,7 +94,11 @@ function set_format($format) {
     if(count($indexes) > 2) {
         if($format === 'moodle') {
             $items_array = write_blanks_moodle($items_array, $indexes[1]);
-        } else {
+        }
+        if($format === 'htmlform') {
+            $items_array = write_blanks_html($items_array, $indexes[1]);
+        }   
+        if($format === 'pdf') {
             $items_array = write_blanks_pdf($items_array, $indexes[1]);
         }
         // Generate paragraph text from array
@@ -90,8 +106,8 @@ function set_format($format) {
     } else {
         $reassembled_paragraph = 'Input paragraph text must be at least 3 sentences long.';
     }
-    print_output_page();
 }
+
 /*
  * Split paragraph into words and punctuation
  * Parameter string
@@ -143,12 +159,34 @@ function write_blanks_pdf(array $items_array, int $index) {
 }
 
 /*
+ * Select every other word for blanking
+ * Parameters array, int
+ * Returns array
+ */
+function write_blanks_html(array $items_array, int $index) {
+    global $blank_word_count;
+    $len = count($items_array);
+    $even = false;
+    for($i = $index; $i < $len; $i++) { // Start at 3rd sentence index
+        if(preg_match('/[a-zA-Z]/', $items_array[$i])) { // Find words
+            if($even) { // Every other word
+                $even = false;
+                $items_array[$i] = blank_word_html($items_array[$i]);
+                $blank_word_count++;
+            } else {
+                $even = true;
+            }
+        }
+    }
+    return $items_array;
+}
+
+/*
  * Blank word, i.e. change letters in last half of word into blanks and add <em></em> tags
  * Parameter string
  * Returns string
  */
 function blank_word_pdf(string $word) {
-    global $beginblank, $endblank;
     $word_array = str_split($word);
     $len = count($word_array);
     $letters_str = '';
@@ -161,6 +199,28 @@ function blank_word_pdf(string $word) {
         }
     }
     $return_word = $letters_str.'<em>'.$blanks_str.'</em>';
+    return $return_word;
+}
+
+/*
+ * Blank word, i.e. change letters in last half of word into blanks and add <em></em> tags
+ * Parameter string
+ * Returns string
+ */
+function blank_word_html(string $word) {
+    $word_array = str_split($word);
+    $len = count($word_array);
+    $letters_str = '';
+    $blanks_str = '';
+    for($i = 0; $i < $len; $i++) {
+        if($i < floor($len/2)) {
+            $letters_str = $letters_str.$word_array[$i];
+        } else {
+            $blanks_str = $blanks_str.$word_array[$i];
+        }
+    }
+    $blank_len = count(str_split($blanks_str));
+    $return_word = $letters_str.'<input type="text" name="ctest[]" id="ctest[]" style="width: '.($blank_len*12).'px;" maxlength="'.$blank_len.'"/>';
     return $return_word;
 }
 
@@ -193,7 +253,6 @@ function write_blanks_moodle(array $items_array, int $index) {
  * Returns string
  */
 function blank_word_moodle(string $word) {
-    global $beginblank, $endblank;
     $word_array = str_split($word);
     $len = count($word_array);
     $letters_str = '';
@@ -228,10 +287,10 @@ function reassemble_paragraph(array $items_array) {
 }
 
 /*
- * 
+ * Print HTML c-test page
  */
 function print_output_page() {
-    global $title, $paragraph, $reassembled_paragraph, $blank_word_count, $copyright;
+    global $title, $reassembled_paragraph, $blank_word_count, $copyright;
     $output_page = ' <!DOCTYPE html>
     <html>
         <head>
@@ -248,20 +307,11 @@ function print_output_page() {
                 <p class="ctest">'.$reassembled_paragraph.'</p>
                 <p class="ctest">Score: ____/'.$blank_word_count.'</p>
                 <p>&nbsp;</p>
-                <p>Text copyright information: '.$copyright.'</p>
+                <p>Text reference: '.$copyright.'</p>
                 <p>&nbsp;</p>
-            <p>&nbsp;</p>
-            <p>&nbsp;</p>
-            <h3>Answer Key</h3>
-                <p>'.$paragraph.'</p>
-                <p>Text copyright information: '.$copyright.'</p>
-                <p><strong>Ctest Generator</strong></p>
-                <ul>
-                <li><i>By Matt Bury <a href="https://matbury.com/" target="_blank">https://matbury.com/</a></li>
-                <li>Available under a GNU GPL v3 open software licence 
-                <a href="https://www.gnu.org/copyleft/gpl.html" target="_blank">https://www.gnu.org/copyleft/gpl.html</a></li>
-                <li>Source code is at <a href="https://github.com/matbury" target="_blank">https://github.com/matbury</a></li>
-                </ul>
+                <p><strong>Ctest Generator</strong> by Matt Bury <a href="https://matbury.com/" target="_blank">https://matbury.com/</a> is available under a GNU GPL v3 open software licence 
+                <a href="https://www.gnu.org/copyleft/gpl.html" target="_blank">https://www.gnu.org/copyleft/gpl.html</a>. Source code is at <a href="https://github.com/matbury" target="_blank">https://github.com/matbury</a></li>
+                </p>
             <form> 
                 <input type="button" value="Print" 
                    onclick="window.print()" /> 
@@ -272,7 +322,7 @@ function print_output_page() {
 }
 
 /*
- * 
+ * Print HTML input form
  */
 function print_input_page() {
     $output_page = ' <!DOCTYPE html>
@@ -284,20 +334,19 @@ function print_input_page() {
             <script type="text/javascript"> 
             </script> 
         </head>
-
         <body>
         <p><strong>Ctest Instructions: Please enter a single paragraph of text which contains at least 3 sentences and is at least 250 characters long.</strong></p>
                 <p>&nbsp;</p>
                 <form action="index.php" method="post">
                 <fieldset>
                     <legend>Ctest Text</legend>
-                    Title:<br><textarea minlength=1 name="title" style="width:600px; height:20px;"></textarea><br>
-                    Paragraph:<br><textarea minlength=250 name="paragraph" style="width:600px; height:300px;"></textarea><br>
+                    Title:<br><textarea minlength=1 name="title" style="width:600px; height:20px;" required></textarea><br>
+                    Paragraph:<br><textarea minlength=250 name="paragraph" style="width:600px; height:300px;" required></textarea><br>
                     Copyright:<br><textarea name="copyright" style="width:600px; height:75px;"></textarea><br>
-                    <input type="radio" name="format" value="pdf"> Printable PDF format
-                    <input type="radio" name="format" value="moodle"> Moodle Quiz Embedded Answers format<br>
-                    <input type="submit" value="Submit">
-                    <input type="reset">
+                    <input type="radio" name="format" value="pdf"> Printable PDF format 
+                    <input type="radio" name="format" value="moodle"> Moodle Quiz Embedded Answers format 
+                    <input type="radio" name="format" value="htmlform"> HTML form<br>
+                    <input type="submit" value="Submit"><input type="reset">
                 </fieldset>
                 </form>
                 <p>&nbsp;</p>
