@@ -49,9 +49,9 @@ if(isset($_POST['title'])) {
     }
 }
 
-// This one may be causing unexpectedly long blank lengths, perhaps introducing escape/URL encoded characters?
 if(isset($_POST['paragraph'])) {
-    $paragraph_check = filter_input(INPUT_POST, 'paragraph', FILTER_SANITIZE_STRING);
+    //$paragraph_check = filter_input(INPUT_POST, 'paragraph', FILTER_UNSAFE_RAW); // For testing only UNSAFE! DO NOT PUT ON PUBLICLY ACCESSIBLE SERVER!
+    $paragraph_check = filter_input(INPUT_POST, 'paragraph', FILTER_SANITIZE_STRING, FILTER_FLAG_NO_ENCODE_QUOTES);
     if(mb_strlen($paragraph_check) > 249) {
         $paragraph = $paragraph_check;
         $post_vars_set = true;
@@ -337,7 +337,7 @@ function print_input_page() {
         <body>
         <p><strong>Ctest Instructions: Please enter a single paragraph of text which contains at least 3 sentences and is at least 250 characters long.</strong></p>
                 <p>&nbsp;</p>
-                <form action="index.php" method="post">
+                <form action="index.php" method="post" enctype="multipart/form-data">
                 <fieldset>
                     <legend>Ctest Text</legend>
                     Title:<br><textarea minlength=1 name="title" style="width:600px; height:20px;" required></textarea><br>
